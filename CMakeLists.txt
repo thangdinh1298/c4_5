@@ -3,4 +3,4 @@ project(C4_5)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(C4_5 main.cpp include/rapid.h include/attribute.h)
+add_executable(C4_5 main.cpp include/rapid.h include/attribute.h include/helper.h)
