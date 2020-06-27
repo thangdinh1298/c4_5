@@ -7,17 +7,6 @@
 #include <algorithm>
 #include <unordered_set>
 
-//float get_entropy(const std::vector<int>& label){
-//    size_t positive = 0, negative = 0, total = label.size();
-//    for(int i = 0; i < label.size(); i++){
-//        if(label[i] == 0) negative++;
-//        else positive++;
-//    }
-//    return (positive == 0 || negative == 0) ? 0 :
-//            -(static_cast<float>(negative)/total * log2(static_cast<float>(negative)/total)
-//            + static_cast<float>(positive)/total * log2(static_cast<float>(positive)/total));
-//}
-
 
 /*
  * This method determines the best threshold to split a continuous attribute (column)
@@ -62,7 +51,7 @@ std::pair<float, float> get_optimal_threshold(
         float split_info = get_split_info(lesser_index_set.size(), index_set.size())
                         + get_split_info(greater_index_set.size(), index_set.size());
 
-        float gain_ratio = information_gain/split_info;
+        float gain_ratio = (information_gain == 0) ? 0 : information_gain/split_info;
         if (gain_ratio > optimal_gain_ratio){
             optimal_gain_ratio = gain_ratio;
             optimal_threshold = threshold;
@@ -112,8 +101,8 @@ void recurse_build_tree(const std::vector<int>& labels, // label for each row
             for(int j = 0; j < k; j++){
                 split_info += get_split_info(category_index_set[j].size(), index_set.size());
             }
-
-            gain_ratio = (entropy_b4_split - entropy_after_split)/split_info;
+            float information_gain = entropy_b4_split - entropy_after_split;
+            gain_ratio = (information_gain == 0) ? 0 : information_gain/split_info;
 
 
         } else if (col_types[i] == Attribute::CONTINUOUS){ //Always do a binary split on continuous attributes
