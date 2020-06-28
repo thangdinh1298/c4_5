@@ -11,49 +11,87 @@
 
 namespace TreeNode {
     enum Type {
-        NON_LEAF = 0,
-        LEAF = 1
+        LEAF = 0,
+        CATEGORICAL_NODE = 1,
+        CONTINUOUS_NODE = 2
     };
 
     class TreeNode {
     public:
         TreeNode() = default;
         TreeNode(std::string att_name,
-                int category_count)
-                : type_(NON_LEAF), att_name_(att_name),
-                category_count_(category_count), att_type_(Attribute::CATEGORICAL)
+                int category_count, int index)
+                : type_(CATEGORICAL_NODE), att_name_(att_name),
+                children_(category_count, nullptr), att_index_(index)
         {
-            children_.reserve(category_count);
         }
 
         TreeNode(std::string att_name,
-                float threshold) : type_(NON_LEAF), att_name_(att_name),
-                threshold_(threshold), att_type_(Attribute::CONTINUOUS)
+                float threshold, int index) : type_(CONTINUOUS_NODE), att_name_(att_name),
+                threshold_(threshold), children_(2, nullptr), att_index_(index)
         {
         }
 
         TreeNode(int label) : type_(LEAF), label_(label){
         }
 
-        void add_child_node() {
-
+        void add_categorical(int category, TreeNode* node) {
+            children_[category] = node;
         }
 
-        TreeNode* get_next_node_categorical(int category){
-            return children_[category];
+        void add_continuous(bool less, TreeNode* node){
+            if (less) children_[0] = node;
+            else children_[1] = node;
         }
 
-        TreeNode* get_next_node_continuous(float val){
-            return (val < threshold_) ? children_[0] : children_[1];
+        template<class T>
+        TreeNode* test(T value){
+            if(type_ == CONTINUOUS_NODE){
+                return (value < threshold_) ? children_[0] : children_[1];
+            } else if(type_ == CATEGORICAL_NODE) return children_[value];
+            else return nullptr;
+        }
+
+        Type getType() const {
+            return type_;
+        }
+
+        const std::string &getAttName() const {
+            return att_name_;
+        }
+
+        int getAttIndex() const {
+            return att_index_;
+        }
+
+        float getThreshold() const {
+            return threshold_;
+        }
+
+        void print_node(){
+            if(type_ == CONTINUOUS_NODE) {
+                std::cout << "=============================\n";
+                std::cout << "Continuous node for attribute " << att_name_ <<
+                "with threshold " << threshold_<<'\n';
+            } else if(type_ == CATEGORICAL_NODE){
+                std::cout << "=============================\n";
+                std::cout << "Categorical node for attribute " << att_name_ << '\n';
+            } else {
+                std::cout << "=============================\n";
+                std::cout << "Leaf node with label " << label_ << '\n';
+            }
+        }
+
+        const std::vector<TreeNode *> &getChildren() const {
+            return children_;
         }
 
     protected:
         Type type_;
         int label_;
         std::string att_name_;
-        Attribute::Type att_type_;
-        int category_count_;
-        std::unordered_map<TreeNode*> children_;
+        std::vector<TreeNode*> children_;
+        int att_index_; //TODO: INITIALIZE THIS
         float threshold_;
     };
 }

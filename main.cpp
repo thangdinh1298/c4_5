@@ -4,6 +4,7 @@
 #include <fstream>
 #include "include/rapid.h"
 #include "include/attribute.h"
+#include "include/tree_node.h"
 #include <algorithm>
 #include <unordered_set>
 
@@ -66,7 +67,7 @@ std::pair<float, float> get_optimal_threshold(
  * and builds a node for the corresponding split
  * this function assumes the index set passed in is impure
  */
-void recurse_build_tree(const std::vector<int>& labels, // label for each row
+TreeNode::TreeNode* get_tree_node(const std::vector<int>& labels, // label for each row
                         const std::vector<int>& col_category_count, // category count for each column
                         const std::vector<Attribute::Type>& col_types, // types of each column
                         const std::vector<std::string>& col_names, // name of each column
@@ -125,6 +126,108 @@ void recurse_build_tree(const std::vector<int>& labels, // label for each row
     std::cout << "Split by " << col_names[split_col_index] << " with gain ratio " << optimal_gain_ratio;
     if(col_types[split_col_index] == Attribute::CONTINUOUS) std::cout << " with threshold " << optimal_threshold;
     std::cout << '\n';
+
+    if(split_col_index == -1){
+        return nullptr;
+    }
+    if(col_types[split_col_index] == Attribute::CONTINUOUS){
+        return new TreeNode::TreeNode(col_names[split_col_index], optimal_threshold, split_col_index);
+    }
+    if(col_types[split_col_index] == Attribute::CATEGORICAL){
+        return new TreeNode::TreeNode(col_names[split_col_index], col_category_count[split_col_index], split_col_index);
+    }
+}
+/*
+ * This method assumes index set is not empty
+ */
+TreeNode::TreeNode* build_tree(
+        int label_num,
+        const std::vector<int>& labels, // label for each row
+        const std::vector<int>& col_category_count, // category count for each column
+        const std::vector<Attribute::Type>& col_types, // types of each column
+        const std::vector<std::string>& col_names, // name of each column
+        const std::unordered_set<int>& index_set, //set of rows to split
+        const std::unordered_set<int>& col_set, //set of column (attributes) to consider
+        const rapidcsv::Document& doc)
+{
+    if (index_set.empty() || col_set.empty()) return nullptr;
+    else if(is_pure(labels, index_set)) {
+        return new TreeNode::TreeNode (labels[*index_set.begin()]);
+    }
+    // get node
+    TreeNode::TreeNode* node = get_tree_node(labels, col_category_count, col_types, col_names, index_set, col_set, doc);
+
+    //divide the index set into subsets and build tree from that subset
+    switch (node->getType()) {
+        case TreeNode::CATEGORICAL_NODE: {
+            int column_id = node->getAttIndex();
+            std::vector<int> col = doc.GetColumn<int>(column_id);
+            int category_count = col_category_count[column_id];
+            std::vector<std::unordered_set<int>> subsets(category_count, std::unordered_set<int>());
+
+            //build subsets
+            for (auto index: index_set) {
+                subsets[col.at(index)].insert(index);
+            }
+
+            std::unordered_set<int> subset_column(col_set.begin(), col_set.end());
+            subset_column.erase(column_id);
+            if(subset_column.empty())
+            for (int i = 0; i < subsets.size(); i++) {
+                std::unordered_set<int> subset = subsets[i];
+                TreeNode::TreeNode *child = (subset.empty()) ?
+                                            new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num)) :
+                                            build_tree(label_num, labels, col_category_count, col_types, col_names,
+                                                       subset, subset_column, doc);
+
+                node->add_categorical(i, child); //Attach the child node to the parent node
+            }
+            break;
+        }
+        case TreeNode::CONTINUOUS_NODE: {
+            int column_id = node->getAttIndex();
+            std::vector<int> col = doc.GetColumn<int>(column_id);
+
+            std::vector<std::unordered_set<int>> subsets(2, std::unordered_set<int>());
+            for (auto index: index_set) {
+                if(col.at(index) < node->getThreshold()) {
+                    subsets[0].insert(index);
+                } else subsets[1].insert(index);
+            }
+
+            std::unordered_set<int> subset_column(col_set.begin(), col_set.end());
+            subset_column.erase(column_id);
+            TreeNode::TreeNode* lesser_node = (subsets[0].empty()) ?
+                                          new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num)) :
+                                          build_tree(label_num, labels, col_category_count, col_types, col_names,
+                                  subsets[0], subset_column, doc);
+            TreeNode::TreeNode* greater_node = (subsets[1].empty()) ?
+                                               new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num)) :
+                                               build_tree(label_num, labels, col_category_count, col_types, col_names,
+                                       subsets[1], subset_column, doc);
+
+            node->add_continuous(true, lesser_node);
+            node->add_continuous(false, greater_node);
+            break;
+        }
+        default:
+            break; //should never happen because we checked for pure set above
+    }
+    //return the node
+    return node;
+}
+
+void print_tree(TreeNode::TreeNode* root){
+    if(root == nullptr) {
+        std::cout << "Undefined node" << '\n';
+        return;
+    }
+    root->print_node();
+    auto children = root->getChildren();
+    for(auto child: children) {
+        print_tree(child);
+    }
+
 }
 
 int main(int argc, char** argv) {
@@ -191,14 +294,17 @@ int main(int argc, char** argv) {
     std::unordered_set<int> column_set;
     for(int i = 0; i < doc.GetRowCount(); i++) index_set.insert(i);
     for(int i = 0; i < doc.GetColumnCount(); i++) column_set.insert(i);
-    recurse_build_tree(
-        labels,
-        column_category_count,
-        column_types,
-        column_names,
-        index_set,
-        column_set,
-        doc
-    );
+//    get_tree_node(
+//        labels,
+//        column_category_count,
+//        column_types,
+//        column_names,
+//        index_set,
+//        column_set,
+//        doc
+//    );
 
+    TreeNode::TreeNode* root = build_tree(column_category_count[doc.GetColumnCount() - 1],
+            labels, column_category_count, column_types, column_names, index_set, column_set, doc);
+    print_tree(root);
 }

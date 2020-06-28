@@ -43,4 +43,26 @@ float get_entropy(const std::vector<int>& label,
     return -entropy;
 }
 
+bool is_pure(const std::vector<int>& labels,
+             const std::unordered_set<int>& index_set)
+{
+    int first_label = labels[*index_set.begin()];
+    for(auto it = index_set.begin(); it != index_set.end(); it++){
+        if(labels[*it] != first_label) return false;
+    }
+    return true;
+}
+
+int get_majority_label(
+                const std::vector<int> &labels,
+                const std::unordered_set<int> &index_set,
+                int label_num)
+{
+    std::vector<int> labels_count(label_num, 0);
+    for(auto index: index_set) labels_count[labels[index]]++;
+    int max_label = -1;
+    for(auto label_count: labels_count) if (label_count > max_label) max_label = label_count;
+    return max_label;
+}
+
 #endif //C4_5_HELPER_H
