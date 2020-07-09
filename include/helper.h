@@ -58,10 +58,19 @@ int get_majority_label(
                 const std::unordered_set<int> &index_set,
                 int label_num)
 {
+    std::cout<<"Label num is: "<<label_num<<'\n';
     std::vector<int> labels_count(label_num, 0);
     for(auto index: index_set) labels_count[labels[index]]++;
+    int max_label_count = -1;
     int max_label = -1;
-    for(auto label_count: labels_count) if (label_count > max_label) max_label = label_count;
+    for(int i = 0; i < labels_count.size(); i++) {
+        int label_count = labels_count[i];
+        if (label_count > max_label_count) {
+            max_label_count = label_count;
+            max_label = i;
+        }
+    }
+    std::cout<<"Max label is: "<<max_label<<std::endl;
     return max_label;
 }
 

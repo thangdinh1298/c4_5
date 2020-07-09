@@ -18,10 +18,11 @@ enum Type : int {
 struct attribute_t {
     Type type_;
     float threshold_;
+    std::string att_name_;
     int att_index_;
 
-    attribute_t(Type t, int att_index=-1, float threshold=0) :
-                type_(t), att_index_(att_index), threshold_(threshold)
+    attribute_t(Type t, std::string att_name="", int att_index=-1, float threshold=0) :
+            type_(t), att_name_(std::move(att_name)), threshold_(threshold), att_index_(att_index)
     {
 
     }

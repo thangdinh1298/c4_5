@@ -131,10 +131,11 @@ Attribute::attribute_t get_best_att(const std::vector<int>& labels, // label for
         return Attribute::attribute_t(Attribute::INVALID);
     }
     if(col_types[split_col_index] == Attribute::CONTINUOUS){
-        return Attribute::attribute_t(Attribute::CONTINUOUS, split_col_index, optimal_threshold);
+        return Attribute::attribute_t(Attribute::CONTINUOUS,
+                col_names[split_col_index], split_col_index, optimal_threshold);
     }
     if(col_types[split_col_index] == Attribute::CATEGORICAL){
-        return Attribute::attribute_t(Attribute::CATEGORICAL, split_col_index);
+        return Attribute::attribute_t(Attribute::CATEGORICAL, col_names[split_col_index], split_col_index);
     }
 }
 /*
@@ -150,17 +151,19 @@ TreeNode::TreeNode* build_tree(
         const std::unordered_set<int>& col_set, //set of column (attributes) to consider
         const rapidcsv::Document& doc)
 {
-    if (index_set.empty() || col_set.empty()) return nullptr;
-    else if(is_pure(labels, index_set)) {
+//    if (index_set.empty() || col_set.empty()) return nullptr;
+    /*else */if(is_pure(labels, index_set)) {
         return new TreeNode::TreeNode (labels[*index_set.begin()]);
     }
-    // get node
+    // get attribute
     Attribute::attribute_t attribute = get_best_att(labels, col_category_count,
                                         col_types, col_names, index_set, col_set, doc);
 
+    TreeNode::TreeNode* node = nullptr;
+
     //divide the index set into subsets and build tree from that subset
     switch (attribute.type_) {
-        case TreeNode::CATEGORICAL_NODE: {
+        case Attribute::CATEGORICAL : {
             int column_id = attribute.att_index_;
             std::vector<int> col = doc.GetColumn<int>(column_id);
             int category_count = col_category_count[column_id];
@@ -181,38 +184,54 @@ TreeNode::TreeNode* build_tree(
 
             std::unordered_set<int> subset_column(col_set.begin(), col_set.end());
             subset_column.erase(column_id);
-            if(subset_column.empty())
+
+            if(subset_column.empty()) { // if no more column to split, return majority
+                return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
+            }
+
+            node = new TreeNode::TreeNode(attribute.att_name_,
+                    col_category_count[attribute.att_index_], attribute.att_index_);
+
             for (int i = 0; i < subsets.size(); i++) {
                 std::unordered_set<int> subset = subsets[i];
+                //if child node has no record to split on, just return a leaf node with majority from parent
                 TreeNode::TreeNode *child = (subset.empty()) ?
                                             new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num)) :
-                                            build_tree(label_num, labels, col_category_count, col_types, col_names,
+                                                build_tree(label_num, labels, col_category_count, col_types, col_names,
                                                        subset, subset_column, doc);
 
                 node->add_categorical(i, child); //Attach the child node to the parent node
             }
             break;
         }
-        case TreeNode::CONTINUOUS_NODE: {
-            int column_id = node->getAttIndex();
+        case Attribute::CONTINUOUS: {
+            int column_id = attribute.att_index_;
             std::vector<int> col = doc.GetColumn<int>(column_id);
 
             std::vector<std::unordered_set<int>> subsets(2, std::unordered_set<int>());
             for (auto index: index_set) {
-                if(col.at(index) < node->getThreshold()) {
+                if(col.at(index) < attribute.threshold_) {
                     subsets[0].insert(index);
                 } else subsets[1].insert(index);
             }
 
+            if(subsets[0].empty() || subsets[1].empty()) {
+                return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
+            }
+
             std::unordered_set<int> subset_column(col_set.begin(), col_set.end());
             subset_column.erase(column_id);
-            TreeNode::TreeNode* lesser_node = (subsets[0].empty()) ?
-                                          new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num)) :
-                                          build_tree(label_num, labels, col_category_count, col_types, col_names,
+
+            if(subset_column.empty()) { // if no more column to split, return majority
+                return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
+            }
+
+            node = new TreeNode::TreeNode(attribute.att_name_,
+                                        attribute.threshold_, attribute.att_index_);
+
+            TreeNode::TreeNode* lesser_node = build_tree(label_num, labels, col_category_count, col_types, col_names,
                                   subsets[0], subset_column, doc);
-            TreeNode::TreeNode* greater_node = (subsets[1].empty()) ?
-                                               new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num)) :
-                                               build_tree(label_num, labels, col_category_count, col_types, col_names,
+            TreeNode::TreeNode* greater_node = build_tree(label_num, labels, col_category_count, col_types, col_names,
                                        subsets[1], subset_column, doc);
 
             node->add_continuous(true, lesser_node);
@@ -226,18 +245,20 @@ TreeNode::TreeNode* build_tree(
     return node;
 }
 
-void print_tree(TreeNode::TreeNode* root){
+void print_tree(TreeNode::TreeNode* root, int level=0){
     if(root == nullptr) {
         std::cout << "Undefined node" << '\n';
         return;
     }
-    root->print_node();
+    std::cout<<"Level "<<level<<'\n';
+    root->print_node(1);
     auto children = root->getChildren();
     for(auto child: children) {
-        print_tree(child);
+        print_tree(child, level+1);
     }
 
 }
+
 
 int main(int argc, char** argv) {
     if(argc != 3){

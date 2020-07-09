@@ -68,17 +68,21 @@ public:
         return threshold_;
     }
 
-    void print_node(){
-        if(type_ == CONTINUOUS_NODE) {
-            std::cout << "=============================\n";
-            std::cout << "Continuous node for attribute " << att_name_ <<
-            "with threshold " << threshold_<<'\n';
-        } else if(type_ == CATEGORICAL_NODE){
-            std::cout << "=============================\n";
-            std::cout << "Categorical node for attribute " << att_name_ << '\n';
+    void print_node(bool verbose=0){
+        if(verbose) {
+            if (type_ == CONTINUOUS_NODE) {
+                std::cout << "=============================\n";
+                std::cout << "Continuous node for attribute " << att_name_ <<
+                          "with threshold " << threshold_ << '\n';
+            } else if (type_ == CATEGORICAL_NODE) {
+                std::cout << "=============================\n";
+                std::cout << "Categorical node for attribute " << att_name_ << '\n';
+            } else {
+                std::cout << "=============================\n";
+                std::cout << "Leaf node with label " << label_ << '\n';
+            }
         } else {
-            std::cout << "=============================\n";
-            std::cout << "Leaf node with label " << label_ << '\n';
+            std::cout<<att_name_<<'\t';
         }
     }
 
@@ -88,7 +92,7 @@ public:
 
 protected:
     Type type_;
-    int label_;
+    int label_ = -1;
     std::string att_name_;
     std::vector<TreeNode*> children_;
     int att_index_; //TODO: INITIALIZE THIS
