@@ -67,7 +67,7 @@ std::pair<float, float> get_optimal_threshold(
  * and builds a node for the corresponding split
  * this function assumes the index set passed in is impure
  */
-TreeNode::TreeNode* get_tree_node(const std::vector<int>& labels, // label for each row
+Attribute::attribute_t get_best_att(const std::vector<int>& labels, // label for each row
                         const std::vector<int>& col_category_count, // category count for each column
                         const std::vector<Attribute::Type>& col_types, // types of each column
                         const std::vector<std::string>& col_names, // name of each column
@@ -128,13 +128,13 @@ TreeNode::TreeNode* get_tree_node(const std::vector<int>& labels, // label for e
     std::cout << '\n';
 
     if(split_col_index == -1){
-        return nullptr;
+        return Attribute::attribute_t(Attribute::INVALID);
     }
     if(col_types[split_col_index] == Attribute::CONTINUOUS){
-        return new TreeNode::TreeNode(col_names[split_col_index], optimal_threshold, split_col_index);
+        return Attribute::attribute_t(Attribute::CONTINUOUS, split_col_index, optimal_threshold);
     }
     if(col_types[split_col_index] == Attribute::CATEGORICAL){
-        return new TreeNode::TreeNode(col_names[split_col_index], col_category_count[split_col_index], split_col_index);
+        return Attribute::attribute_t(Attribute::CATEGORICAL, split_col_index);
     }
 }
 /*
@@ -155,12 +155,13 @@ TreeNode::TreeNode* build_tree(
         return new TreeNode::TreeNode (labels[*index_set.begin()]);
     }
     // get node
-    TreeNode::TreeNode* node = get_tree_node(labels, col_category_count, col_types, col_names, index_set, col_set, doc);
+    Attribute::attribute_t attribute = get_best_att(labels, col_category_count,
+                                        col_types, col_names, index_set, col_set, doc);
 
     //divide the index set into subsets and build tree from that subset
-    switch (node->getType()) {
+    switch (attribute.type_) {
         case TreeNode::CATEGORICAL_NODE: {
-            int column_id = node->getAttIndex();
+            int column_id = attribute.att_index_;
             std::vector<int> col = doc.GetColumn<int>(column_id);
             int category_count = col_category_count[column_id];
             std::vector<std::unordered_set<int>> subsets(category_count, std::unordered_set<int>());
@@ -168,6 +169,14 @@ TreeNode::TreeNode* build_tree(
             //build subsets
             for (auto index: index_set) {
                 subsets[col.at(index)].insert(index);
+            }
+
+            int non_empty_set_count = std::count_if(subsets.begin(), subsets.end(),
+                                      [](std::unordered_set<int> s){
+                                            return !s.empty();
+                                      });
+            if (non_empty_set_count <= 1) { //If everything gets directed into the same set, stop the tree
+                return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
             }
 
             std::unordered_set<int> subset_column(col_set.begin(), col_set.end());
