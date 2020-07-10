@@ -52,6 +52,10 @@ public:
         else return nullptr;
     }
 
+    int getLabel() const {
+        return label_;
+    }
+
     Type getType() const {
         return type_;
     }

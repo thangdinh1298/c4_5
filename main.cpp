@@ -5,6 +5,7 @@
 #include "include/rapid.h"
 #include "include/attribute.h"
 #include "include/tree_node.h"
+#include "include/stat.h"
 #include <algorithm>
 #include <unordered_set>
 
@@ -123,9 +124,13 @@ Attribute::attribute_t get_best_att(const std::vector<int>& labels, // label for
         std::cout << "For column " << col_names[i] << " gain ratio would be " << gain_ratio << '\n';
     }
 
-    std::cout << "Split by " << col_names[split_col_index] << " with gain ratio " << optimal_gain_ratio;
-    if(col_types[split_col_index] == Attribute::CONTINUOUS) std::cout << " with threshold " << optimal_threshold;
-    std::cout << '\n';
+    if(split_col_index != -1) {
+        std::cout << "Split by " << col_names[split_col_index] << " with gain ratio " << optimal_gain_ratio;
+        if (col_types[split_col_index] == Attribute::CONTINUOUS) std::cout << " with threshold " << optimal_threshold;
+        std::cout << '\n';
+    } else {
+        std::cout << "No valid index was found" << '\n';
+    }
 
     if(split_col_index == -1){
         return Attribute::attribute_t(Attribute::INVALID);
@@ -238,8 +243,12 @@ TreeNode::TreeNode* build_tree(
             node->add_continuous(false, greater_node);
             break;
         }
+        case Attribute::INVALID:{
+            return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
+            break;
+        }
         default:
-            break; //should never happen because we checked for pure set above
+            break;
     }
     //return the node
     return node;
@@ -256,8 +265,37 @@ void print_tree(TreeNode::TreeNode* root, int level=0){
     for(auto child: children) {
         print_tree(child, level+1);
     }
-
 }
+
+bool verify_row(TreeNode::TreeNode* root, const std::vector<int>& labels, int index, const rapidcsv::Document& doc){
+    if (root->getType() == TreeNode::LEAF){
+        return labels[index] == root->getLabel();
+    } else if(root->getType() == TreeNode::CATEGORICAL_NODE){
+        int row_category = doc.GetCell<int>(root->getAttIndex(), index);
+        return verify_row(root->getChildren()[row_category], labels, index, doc);
+    } else {
+        int row_value = doc.GetCell<float>(root->getAttIndex(), index);
+        return (row_value < root->getThreshold()) ?
+                    verify_row(root->getChildren()[0], labels, index, doc):
+                    verify_row(root->getChildren()[1], labels, index, doc);
+    }
+}
+
+stat_t verify_set(  TreeNode::TreeNode* root, //root of the C4.5 tree
+                    const std::vector<int>& labels,
+                    const std::unordered_set<int>& index_set, //set of rows to split
+                    const rapidcsv::Document& doc
+                    )
+{
+    stat_t stat;
+    for (auto index: index_set){
+        bool result = verify_row(root, labels, index, doc);
+        if(result) stat.correct++;
+        else stat.wrong++;
+    }
+    return stat;
+}
+
 
 
 int main(int argc, char** argv) {
@@ -320,9 +358,13 @@ int main(int argc, char** argv) {
     }
     std::vector<int> labels = doc.GetColumn<int>(label_col_idx);
 
+    std::unordered_set<int> test_set;
     std::unordered_set<int> index_set;
+    size_t test_set_size = 50;
+    for(int i = 0; i < doc.GetRowCount() - test_set_size; i++) index_set.insert(i);
+    for(int i = doc.GetRowCount() - test_set_size; i < doc.GetRowCount(); i++) test_set.insert(i);
+
     std::unordered_set<int> column_set;
-    for(int i = 0; i < doc.GetRowCount(); i++) index_set.insert(i);
     for(int i = 0; i < doc.GetColumnCount(); i++) column_set.insert(i);
 //    get_tree_node(
 //        labels,
@@ -337,4 +379,6 @@ int main(int argc, char** argv) {
     TreeNode::TreeNode* root = build_tree(column_category_count[doc.GetColumnCount() - 1],
             labels, column_category_count, column_types, column_names, index_set, column_set, doc);
     print_tree(root);
+    stat_t stat = verify_set(root, labels, test_set, doc);
+    stat.print_stat();
 }
