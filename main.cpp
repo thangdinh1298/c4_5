@@ -2,6 +2,7 @@
 #include <math.h>
 #include "include/helper.h"
 #include <fstream>
+#include "test/entropy_test.h"
 #include "include/rapid.h"
 #include "include/attribute.h"
 #include "include/tree_node.h"
@@ -183,7 +184,7 @@ TreeNode::TreeNode* build_tree(
                                       [](std::unordered_set<int> s){
                                             return !s.empty();
                                       });
-            if (non_empty_set_count <= 1) { //If everything gets directed into the same set, stop the tree
+            if (non_empty_set_count <= 1) { //If everything gets partitioned into the same set, return a leaf
                 return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
             }
 
@@ -245,7 +246,6 @@ TreeNode::TreeNode* build_tree(
         }
         case Attribute::INVALID:{
             return new TreeNode::TreeNode(get_majority_label(labels, index_set, label_num));
-            break;
         }
         default:
             break;
@@ -269,6 +269,7 @@ void print_tree(TreeNode::TreeNode* root, int level=0){
 
 bool verify_row(TreeNode::TreeNode* root, const std::vector<int>& labels, int index, const rapidcsv::Document& doc){
     if (root->getType() == TreeNode::LEAF){
+        std::cout << "Label of record is " << labels[index] << " leaf node label is " << root->getLabel() << '\n';
         return labels[index] == root->getLabel();
     } else if(root->getType() == TreeNode::CATEGORICAL_NODE){
         int row_category = doc.GetCell<int>(root->getAttIndex(), index);
@@ -299,6 +300,14 @@ stat_t verify_set(  TreeNode::TreeNode* root, //root of the C4.5 tree
 
 
 int main(int argc, char** argv) {
+    /*
+     * Run tests
+     */
+    entropy_tests();
+
+    /*
+     * Run program
+     */
     if(argc != 3){
         std::cout << "Usage: program [csv_data_file] [column_desc_file]" << '\n';
         return 1;
@@ -360,21 +369,12 @@ int main(int argc, char** argv) {
 
     std::unordered_set<int> test_set;
     std::unordered_set<int> index_set;
-    size_t test_set_size = 50;
+    size_t test_set_size = 10;
     for(int i = 0; i < doc.GetRowCount() - test_set_size; i++) index_set.insert(i);
     for(int i = doc.GetRowCount() - test_set_size; i < doc.GetRowCount(); i++) test_set.insert(i);
 
     std::unordered_set<int> column_set;
     for(int i = 0; i < doc.GetColumnCount(); i++) column_set.insert(i);
-//    get_tree_node(
-//        labels,
-//        column_category_count,
-//        column_types,
-//        column_names,
-//        index_set,
-//        column_set,
-//        doc
-//    );
 
     TreeNode::TreeNode* root = build_tree(column_category_count[doc.GetColumnCount() - 1],
             labels, column_category_count, column_types, column_names, index_set, column_set, doc);

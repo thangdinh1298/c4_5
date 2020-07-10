@@ -3,4 +3,4 @@ project(C4_5)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(C4_5 main.cpp include/rapid.h include/attribute.h include/helper.h include/tree_node.h include/stat.h)
+add_executable(C4_5 main.cpp include/rapid.h include/attribute.h include/helper.h include/tree_node.h include/stat.h test/entropy_test.h test/gain_info_test.h)
