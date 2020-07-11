@@ -17,7 +17,7 @@ std::vector<float> get_thresholds(const std::vector<float>& unique_sorted){
     if (unique_sorted.empty()) return results;
     results.push_back(unique_sorted[0] - 5.);
     for(auto it = unique_sorted.begin(); it + 1 != unique_sorted.end(); it++){
-        float thresh = (*it + *it+1)/2;
+        float thresh = (*it + *(it+1))/2;
         results.push_back(thresh);
     }
     results.push_back(unique_sorted[unique_sorted.size() - 1] + 5.);
@@ -58,7 +58,8 @@ int get_majority_label(
                 const std::unordered_set<int> &index_set,
                 int label_num)
 {
-    std::cout<<"Label num is: "<<label_num<<'\n';
+//    std::cout<<"Label num is: "<<label_num<<'\n';
+    if(index_set.empty()) return -1;
     std::vector<int> labels_count(label_num, 0);
     for(auto index: index_set) labels_count[labels[index]]++;
     int max_label_count = -1;
@@ -70,7 +71,7 @@ int get_majority_label(
             max_label = i;
         }
     }
-    std::cout<<"Max label is: "<<max_label<<std::endl;
+//    std::cout<<"Max label is: "<<max_label<<std::endl;
     return max_label;
 }
 

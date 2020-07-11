@@ -2,7 +2,7 @@
 #include <math.h>
 #include "include/helper.h"
 #include <fstream>
-#include "test/entropy_test.h"
+#include "test/helper_func_test.h"
 #include "include/rapid.h"
 #include "include/attribute.h"
 #include "include/tree_node.h"
@@ -84,7 +84,7 @@ Attribute::attribute_t get_best_att(const std::vector<int>& labels, // label for
     int split_col_index = -1;
 
     for(auto i: col_set){
-        std::cout << "Considering column " << i << " " << col_names[i] << '\n';
+//        std::cout << "Considering column " << i << " " << col_names[i] << '\n';
         float gain_ratio = 0.0;
         float threshold = 0.0;
         if(col_types[i] == Attribute::CATEGORICAL){ //Always do a multi-way split on categorical attributes
@@ -122,15 +122,15 @@ Attribute::attribute_t get_best_att(const std::vector<int>& labels, // label for
             optimal_threshold = threshold;
         }
 
-        std::cout << "For column " << col_names[i] << " gain ratio would be " << gain_ratio << '\n';
+//        std::cout << "For column " << col_names[i] << " gain ratio would be " << gain_ratio << '\n';
     }
 
     if(split_col_index != -1) {
-        std::cout << "Split by " << col_names[split_col_index] << " with gain ratio " << optimal_gain_ratio;
-        if (col_types[split_col_index] == Attribute::CONTINUOUS) std::cout << " with threshold " << optimal_threshold;
-        std::cout << '\n';
+//        std::cout << "Split by " << col_names[split_col_index] << " with gain ratio " << optimal_gain_ratio;
+//        if (col_types[split_col_index] == Attribute::CONTINUOUS) std::cout << " with threshold " << optimal_threshold;
+//        std::cout << '\n';
     } else {
-        std::cout << "No valid index was found" << '\n';
+//        std::cout << "No valid index was found" << '\n';
     }
 
     if(split_col_index == -1){
@@ -269,7 +269,7 @@ void print_tree(TreeNode::TreeNode* root, int level=0){
 
 bool verify_row(TreeNode::TreeNode* root, const std::vector<int>& labels, int index, const rapidcsv::Document& doc){
     if (root->getType() == TreeNode::LEAF){
-        std::cout << "Label of record is " << labels[index] << " leaf node label is " << root->getLabel() << '\n';
+//        std::cout << "Label of record is " << labels[index] << " leaf node label is " << root->getLabel() << '\n';
         return labels[index] == root->getLabel();
     } else if(root->getType() == TreeNode::CATEGORICAL_NODE){
         int row_category = doc.GetCell<int>(root->getAttIndex(), index);
@@ -304,6 +304,9 @@ int main(int argc, char** argv) {
      * Run tests
      */
     entropy_tests();
+    split_info_tests();
+    threshold_test();
+    majority_label_test();
 
     /*
      * Run program
@@ -366,19 +369,39 @@ int main(int argc, char** argv) {
         return 1;
     }
     std::vector<int> labels = doc.GetColumn<int>(label_col_idx);
-
-    std::unordered_set<int> test_set;
-    std::unordered_set<int> index_set;
-    size_t test_set_size = 10;
-    for(int i = 0; i < doc.GetRowCount() - test_set_size; i++) index_set.insert(i);
-    for(int i = doc.GetRowCount() - test_set_size; i < doc.GetRowCount(); i++) test_set.insert(i);
-
     std::unordered_set<int> column_set;
     for(int i = 0; i < doc.GetColumnCount(); i++) column_set.insert(i);
+    size_t k = 5; //number of partitions for cross validation
 
-    TreeNode::TreeNode* root = build_tree(column_category_count[doc.GetColumnCount() - 1],
-            labels, column_category_count, column_types, column_names, index_set, column_set, doc);
-    print_tree(root);
-    stat_t stat = verify_set(root, labels, test_set, doc);
-    stat.print_stat();
+    //Cross validation
+    {
+        size_t partition_size = doc.GetRowCount() / k;
+        size_t remainder = doc.GetRowCount() % k;
+
+        std::vector<std::vector<int>> partitions(k, std::vector<int>());
+        for(int i = 0; i < doc.GetRowCount(); i++){
+            size_t partition_index = i / partition_size;
+            if (partition_index >= k) partition_index--;
+            partitions[partition_index].push_back(i);
+        }
+
+        for(int i = 0; i < k; i++){
+            std::unordered_set<int> test_set;
+            std::unordered_set<int> index_set;
+            test_set.insert(partitions[i].begin(), partitions[i].end());
+            for(int j = 0; j < i; j++){
+                index_set.insert(partitions[j].begin(), partitions[j].end());
+            }
+            for(int j = i+1; j < k; j++){
+                index_set.insert(partitions[j].begin(), partitions[j].end());
+            }
+
+            TreeNode::TreeNode* root = build_tree(column_category_count[doc.GetColumnCount() - 1],
+                                                  labels, column_category_count, column_types, column_names, index_set, column_set, doc);
+
+//            print_tree(root);
+            stat_t stat = verify_set(root, labels, test_set, doc);
+            stat.print_stat();
+        }
+    }
 }
